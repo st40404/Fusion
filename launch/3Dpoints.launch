@@ -1,0 +1,20 @@
+<launch>
+  <!-- open launch: realsense driver -->
+  <include file="$(find realsense2_camera)/launch/rs_rgbd.launch">  </include>
+
+  <!-- open launch: lidar driver -->
+  <!-- <include file="$(find urg_node)/launch/urg_lidar.launch">  </include> -->
+
+  <arg name="config_path" default = "$(find fusion)/config/calibra_config.yaml" />
+
+
+
+  <node pkg="fusion" type="showcloud_node" name="showcloud_node" output="screen">
+    <param name="config_file" type="string" value="$(arg config_path)" />
+  </node>
+
+
+  <!-- <node type="rviz" name="rviz" pkg="rviz" args="-d $(find fusion)/rviz/ShowScan.rviz" /> -->
+
+</launch>
+
