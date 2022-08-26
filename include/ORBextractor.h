@@ -32,13 +32,10 @@ class ORBExtrackor {
         void SetConfig(std::string config_file);
         // 設定金字塔每一層所需要的特徵點數量
         void SetPyramid();
-        // void Extrackor(const sensor_msgs::ImageConstPtr &msgRGB, const sensor_msgs::ImageConstPtr &msgD);
         void GrabRGB(const sensor_msgs::ImageConstPtr &msgRGB, const sensor_msgs::ImageConstPtr &msgD);
 
         void GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const double &timestamp);
 
-        // cv::Mat TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const double &timestamp);
-        // void TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const double &timestamp);
         void TrackRGBD(cv::InputArray _image, std::vector<cv::KeyPoint>& _keypoints, cv::OutputArray _descriptors);
 
         // 計算金字塔每一層的像素大小, 並且放到mvImagePyramid裡面
@@ -49,23 +46,16 @@ class ORBExtrackor {
         std::vector<cv::KeyPoint> DistributeOctTree(const std::vector<cv::KeyPoint>& vToDistributeKeys, const int &minX,
                                            const int &maxX, const int &minY, const int &maxY, const int &nFeatures, const int &level);
 
-
+        // 對特徵點進行畸變校正
         void UndistortKeyPoints();
+        // 對特定的特徵點加入深度
+        void ComputeStereoFromRGBD(const cv::Mat &imDepth);
 
         void DrawORB(cv::Mat im, std::vector<cv::KeyPoint> Keys, std::string windows);
-
 
         // use open_cv extract orb feature
         void testTrackRGBD(const cv::Mat &im);
         void testextracte_orb(cv::Mat input,std::vector<cv::KeyPoint> &keypoint,cv::Mat &descriptor);
-
-
-
-        // ORB descriptor, each row associated to a keypoint.
-        // cv::Mat mDescriptors;
-        // cv::OutputArray mDescriptors;
-
-
 
         // camera patameters
         float fx;
@@ -108,7 +98,10 @@ class ORBExtrackor {
 
         cv::Mat mDescriptors;
 
-
+        // Corresponding stereo coordinate and depth for each keypoint.
+        // "Monocular" keypoints have a negative value.
+        std::vector<float> mvuRight;
+        std::vector<float> mvDepth;
 
 
     protected:

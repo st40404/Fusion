@@ -25,8 +25,7 @@
 #include <laser_geometry/laser_geometry.h>
 #include <tf/transform_listener.h>
 
-
-// typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
+typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 
 // add orb feature
 #include "../include/ORBextractor.h"
@@ -46,12 +45,15 @@ class PubPointClouds
 
         // define scan topic
         ros::Publisher Scan_pub;
+        ros::Publisher KeyFrame_pub;
 
         void TranScanToPoints(const sensor_msgs::LaserScanConstPtr& msgSCAN, std::vector<Eigen::Vector3d>& Points);
         void showScanCallback(const sensor_msgs::LaserScanConstPtr& msgSCAN, const sensor_msgs::ImageConstPtr& msgRGB);
         void PubScan(const sensor_msgs::LaserScanConstPtr& msgSCAN);
-        // void PubAllPointClouds(const sensor_msgs::LaserScanConstPtr &msgSCAN, const sensor_msgs::ImageConstPtr &msgRGB, const sensor_msgs::ImageConstPtr &msgD);
-        void PubAllPointClouds(const sensor_msgs::ImageConstPtr &msgRGB, const sensor_msgs::ImageConstPtr &msgD);
+        void PubORB();
+
+        void PubAllPointClouds(const sensor_msgs::LaserScanConstPtr &msgSCAN, const sensor_msgs::ImageConstPtr &msgRGB, const sensor_msgs::ImageConstPtr &msgD);
+        // void PubAllPointClouds(const sensor_msgs::ImageConstPtr &msgRGB, const sensor_msgs::ImageConstPtr &msgD);
 
         ORB::ORBExtrackor extrackor; 
 
@@ -60,46 +62,22 @@ class PubPointClouds
 
 };
 
-// void PubPointClouds::PubPointClouds()
-// {
-//     ORBExtrackor extrackor; 
-// }
 
+void PubPointClouds::PubAllPointClouds(const sensor_msgs::LaserScanConstPtr &msgSCAN, 
+                                       const sensor_msgs::ImageConstPtr &msgRGB, 
+                                       const sensor_msgs::ImageConstPtr &msgD) {
+// void PubPointClouds::PubAllPointClouds(const sensor_msgs::ImageConstPtr &msgRGB, 
+//                                        const sensor_msgs::ImageConstPtr &msgD) {
 
-void PubPointClouds::TranScanToPoints(const sensor_msgs::LaserScanConstPtr& msgSCAN, std::vector<Eigen::Vector3d>& Points)
-{
-    // http://wiki.ros.org/laser_geometry
-    size_t n_pts = msgSCAN->ranges.size ();
-    Eigen::ArrayXXd ranges (n_pts, 2);
-    Eigen::ArrayXXd output (n_pts, 2);
-    Eigen::ArrayXXd co_sine_map (n_pts, 2);
+    // sent RGB and Depth msg to get ORB point cloud
+    extrackor.GrabRGB(msgRGB, msgD);
 
-//        std::cout << "---------- read scan -----------"<<std::endl;
-    for (size_t i = 0; i < n_pts; ++i)
-    {
-        // std::cout << msgSCAN->ranges[i]<< " "<<msgSCAN->angle_min + (double) i * msgSCAN->angle_increment <<std::endl;
-        ranges (i, 0) = (double) msgSCAN->ranges[i];
-        ranges (i, 1) = (double) msgSCAN->ranges[i];
-
-        co_sine_map (i, 0) = cos (msgSCAN->angle_min + (double) i * msgSCAN->angle_increment);
-        co_sine_map (i, 1) = sin (msgSCAN->angle_min + (double) i * msgSCAN->angle_increment);
-    }
-
-    output = ranges * co_sine_map;
-
-    for (size_t i = 0; i < n_pts; ++i) {
-
-        // TODO: range_cutoff threashold
-        double range_cutoff = 30.0;
-        const float range = msgSCAN->ranges[i];
-        if (range < range_cutoff && range >= msgSCAN->range_min)
-        {
-            Points.push_back(Eigen::Vector3d(output (i, 0), output (i, 1), 0) );
-        }
-    }
-
+    // PubScan(msgSCAN);
+    showScanCallback(msgSCAN, msgRGB);
+    // PubORB();
 }
 
+// for testing publish scan feature
 void PubPointClouds::PubScan(const sensor_msgs::LaserScanConstPtr& msgSCAN)
 {
     sensor_msgs::PointCloud2 cloud;
@@ -110,42 +88,38 @@ void PubPointClouds::PubScan(const sensor_msgs::LaserScanConstPtr& msgSCAN)
     Scan_pub.publish(cloud);
 }
 
-
-// void PubPointClouds::PubAllPointClouds(const sensor_msgs::LaserScanConstPtr &msgSCAN, 
-//                                        const sensor_msgs::ImageConstPtr &msgRGB, 
-//                                        const sensor_msgs::ImageConstPtr &msgD) {
-void PubPointClouds::PubAllPointClouds(const sensor_msgs::ImageConstPtr &msgRGB, 
-                                       const sensor_msgs::ImageConstPtr &msgD) {
-
-    // sent RGB and Depth msg to get ORB point cloud
-    extrackor.GrabRGB(msgRGB, msgD);
-
-    // PubScan(msgSCAN);
-    // showScanCallback(msgSCAN, msgRGB);
+// for testing publish orb feature
+void PubPointClouds::PubORB()
+{
+    pcl::PointCloud<pcl::PointXYZ> cloud;
+    cloud.header.frame_id = "camera_aligned_depth_to_color_frame";
+    cloud.points.resize (extrackor.mvKeys.size());
+    for (size_t i=0; i<extrackor.mvKeys.size(); i++)
+    {
+        cloud.points[i].x = extrackor.mvKeys[i].pt.x / 100.0;
+        cloud.points[i].y = extrackor.mvKeys[i].pt.y / 100.0;
+        cloud.points[i].z = extrackor.mvDepth[i];
+    }
+    KeyFrame_pub.publish(cloud);
 }
 
-
 void PubPointClouds::showScanCallback(const sensor_msgs::LaserScanConstPtr& msgSCAN, 
-                                      const sensor_msgs::ImageConstPtr& msgRGB) {
-
+                                      const sensor_msgs::ImageConstPtr& msgRGB) 
+{
     std::vector<Eigen::Vector3d> p_l;
-    TranScanToPoints(msgSCAN, p_l);
+    // TranScanToPoints(msgSCAN, p_l);
 
-    std::cerr << "aaaaaaaaaaaaaaaaaa" << std::endl;
+    Eigen::Matrix4d Tlc;
+    Tlc.setZero();
 
-    std::cerr << p_l.size() << std::endl;
-    std::cerr << "bbbbbbbbbbbbbbbbb" << std::endl;
+    if(!cv_T_.empty())
+        cv::cv2eigen(cv_T_, Tlc);
+    else{
+        std::cerr <<" You Do not have calibra result Tlc. We use a Identity matrix." << std::endl;
+        Tlc.setIdentity();
+    }
 
-//     Eigen::Matrix4d Tlc;
-//     Tlc.setZero();
-
-//     if(!cv_T_.empty())
-//         cv::cv2eigen(cv_T_, Tlc);
-//     else{
-//         std::cerr <<" You Do not have calibra result Tlc. We use a Identity matrix." << std::endl;
-//         Tlc.setIdentity();
-//     }
-
+//     std::cerr << Tlc << std::endl;
 //     Eigen::Matrix3d Rlc = Tlc.block(0,0,3,3);
 //     Eigen::Vector3d tlc(Tlc(0,3),Tlc(1,3),Tlc(2,3));
 
@@ -189,6 +163,39 @@ void PubPointClouds::showScanCallback(const sensor_msgs::LaserScanConstPtr& msgS
 }
 
 
+void PubPointClouds::TranScanToPoints(const sensor_msgs::LaserScanConstPtr& msgSCAN, std::vector<Eigen::Vector3d>& Points)
+{
+    // http://wiki.ros.org/laser_geometry
+    size_t n_pts = msgSCAN->ranges.size ();
+    Eigen::ArrayXXd ranges (n_pts, 2);
+    Eigen::ArrayXXd output (n_pts, 2);
+    Eigen::ArrayXXd co_sine_map (n_pts, 2);
+
+//        std::cout << "---------- read scan -----------"<<std::endl;
+    for (size_t i = 0; i < n_pts; ++i)
+    {
+        // std::cout << msgSCAN->ranges[i]<< " "<<msgSCAN->angle_min + (double) i * msgSCAN->angle_increment <<std::endl;
+        ranges (i, 0) = (double) msgSCAN->ranges[i];
+        ranges (i, 1) = (double) msgSCAN->ranges[i];
+
+        co_sine_map (i, 0) = cos (msgSCAN->angle_min + (double) i * msgSCAN->angle_increment);
+        co_sine_map (i, 1) = sin (msgSCAN->angle_min + (double) i * msgSCAN->angle_increment);
+    }
+
+    output = ranges * co_sine_map;
+
+    for (size_t i = 0; i < n_pts; ++i) {
+
+        // TODO: range_cutoff threashold
+        double range_cutoff = 30.0;
+        const float range = msgSCAN->ranges[i];
+        if (range < range_cutoff && range >= msgSCAN->range_min)
+        {
+            Points.push_back(Eigen::Vector3d(output (i, 0), output (i, 1), 0) );
+        }
+    }
+
+}
 
 template <typename T>
 T readParam(ros::NodeHandle &n, std::string name)
@@ -216,6 +223,8 @@ int main(int argc, char **argv)
     PubPointClouds ppc;
     // define /Ron/Scan topic
     ppc.Scan_pub = nh.advertise<sensor_msgs::PointCloud2>("/Ron/Scan", 1);
+    ppc.KeyFrame_pub = nh.advertise<PointCloud>("/Ron/KeyFrame", 1);
+
     // ppc.Scan_pub = nh.advertise<PointCloud>("/Ron/Scan", 1);
 
     /// ==========================================
@@ -289,20 +298,20 @@ int main(int argc, char **argv)
 
     ppc.extrackor.SetConfig(config_file);
 
-    // message_filters::Subscriber<sensor_msgs::LaserScan> scan_sub(nh, scan_topic_name, 10);
-    // message_filters::Subscriber<sensor_msgs::Image> image_sub(nh, img_topic_name, 10);
-    // message_filters::Subscriber<sensor_msgs::Image> depth_sub(nh, depth_topic_name, 10);
-
-    // typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::LaserScan, sensor_msgs::Image, sensor_msgs::Image> sync_pol;
-    // message_filters::Synchronizer<sync_pol> sync(sync_pol(10), scan_sub, image_sub, depth_sub);
-    // sync.registerCallback(boost::bind(&PubPointClouds::PubAllPointClouds, &ppc, _1, _2, _3));
-
+    message_filters::Subscriber<sensor_msgs::LaserScan> scan_sub(nh, scan_topic_name, 10);
     message_filters::Subscriber<sensor_msgs::Image> image_sub(nh, img_topic_name, 10);
     message_filters::Subscriber<sensor_msgs::Image> depth_sub(nh, depth_topic_name, 10);
 
-    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> sync_pol;
-    message_filters::Synchronizer<sync_pol> sync(sync_pol(10), image_sub, depth_sub);
-    sync.registerCallback(boost::bind(&PubPointClouds::PubAllPointClouds, &ppc, _1, _2));
+    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::LaserScan, sensor_msgs::Image, sensor_msgs::Image> sync_pol;
+    message_filters::Synchronizer<sync_pol> sync(sync_pol(10), scan_sub, image_sub, depth_sub);
+    sync.registerCallback(boost::bind(&PubPointClouds::PubAllPointClouds, &ppc, _1, _2, _3));
+
+    // message_filters::Subscriber<sensor_msgs::Image> image_sub(nh, img_topic_name, 10);
+    // message_filters::Subscriber<sensor_msgs::Image> depth_sub(nh, depth_topic_name, 10);
+
+    // typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> sync_pol;
+    // message_filters::Synchronizer<sync_pol> sync(sync_pol(10), image_sub, depth_sub);
+    // sync.registerCallback(boost::bind(&PubPointClouds::PubAllPointClouds, &ppc, _1, _2));
     std::cout << "start spin.." << std::endl;
 
     ros::spin();

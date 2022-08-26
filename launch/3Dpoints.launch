@@ -3,7 +3,7 @@
   <include file="$(find realsense2_camera)/launch/rs_rgbd.launch">  </include>
 
   <!-- open launch: lidar driver -->
-  <!-- <include file="$(find urg_node)/launch/urg_lidar.launch">  </include> -->
+  <include file="$(find urg_node)/launch/urg_lidar.launch">  </include>
 
   <arg name="config_path" default = "$(find fusion)/config/calibra_config.yaml" />
 

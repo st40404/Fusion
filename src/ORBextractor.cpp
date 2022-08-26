@@ -524,19 +524,6 @@ void ORBExtrackor::SetPyramid()
 }
 
 
-
-
-
-
-// void ORBExtrackor::Extrackor(const sensor_msgs::ImageConstPtr &msgRGB, 
-//                              const sensor_msgs::ImageConstPtr &msgD)
-// {
-//     GrabRGB(msgRGB, msgD);
-//     // std::cout << "a" << std::endl;
-// }
-
-
-
 void ORBExtrackor::GrabRGB(const sensor_msgs::ImageConstPtr &msgRGB, 
                            const sensor_msgs::ImageConstPtr &msgD)
 {
@@ -572,7 +559,7 @@ void ORBExtrackor::GrabRGB(const sensor_msgs::ImageConstPtr &msgRGB,
     cv_ptrRGB->image.copyTo(unORBimg);
 
     // testTrackRGBD(testORBimg);
-    DrawORB(ORBimg, this->mvKeys, "ORB");
+    // DrawORB(ORBimg, this->mvKeys, "ORB");
     DrawORB(unORBimg, this->mvKeysUn, "unORB");
 
     testORBimg.release();
@@ -611,10 +598,41 @@ void ORBExtrackor::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const 
 
     // 對特徵點進行畸變校正
     UndistortKeyPoints();
+    // 對特定的特徵點加入深度
+    ComputeStereoFromRGBD(imDepth);
+
+    // // Set no stereo information
+    // mvuRight = vector<float>(N,-1);
+    // mvDepth = vector<float>(N,-1);
+
+    // mvpMapPoints = vector<MapPoint*>(N,static_cast<MapPoint*>(NULL));
+    // mvbOutlier = vector<bool>(N,false);
+    // mvbDiscarded = vector<bool>(N,false); // For debug use
+
+    // // This is done only for the first Frame (or after a change in the calibration)
+    // if(mbInitialComputations)
+    // {
+    //     ComputeImageBounds(imGray);
+
+    //     mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/static_cast<float>(mnMaxX-mnMinX);
+    //     mfGridElementHeightInv=static_cast<float>(FRAME_GRID_ROWS)/static_cast<float>(mnMaxY-mnMinY);
+
+    //     fx = K.at<float>(0,0);
+    //     fy = K.at<float>(1,1);
+    //     cx = K.at<float>(0,2);
+    //     cy = K.at<float>(1,2);
+    //     invfx = 1.0f/fx;
+    //     invfy = 1.0f/fy;
+
+    //     mbInitialComputations=false;
+    // }
+
+    // mb = mbf/fx;
+
+    // AssignFeaturesToGrid();
+
 }
 
-// cv::Mat ORBExtrackor::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const double &timestamp)
-// void ORBExtrackor::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const double &timestamp)
 void ORBExtrackor::TrackRGBD(InputArray _image, vector<KeyPoint>& _keypoints, OutputArray _descriptors)
 
 {
@@ -622,7 +640,6 @@ void ORBExtrackor::TrackRGBD(InputArray _image, vector<KeyPoint>& _keypoints, Ou
         return;
 
     Mat image = _image.getMat();
-
 
     assert(image.type() == CV_8UC1 ); // 確認是否為單通道灰度
 
@@ -805,7 +822,6 @@ void ORBExtrackor::ComputeKeyPointsOctTree(vector<vector<KeyPoint> >& allKeypoin
     for (int level = 0; level < nlevels; ++level)
         computeOrientation(this->mvImagePyramid[level], allKeypoints[level], this->umax);
 }
-
 
 // reference: https://blog.csdn.net/djfjkj52/article/details/115173349
 // ORB特徵點均勻化（四元樹演算法）,並且計算出金字塔每一層均勻化後所需要的特徵點數量
@@ -1035,9 +1051,6 @@ vector<cv::KeyPoint> ORBExtrackor::DistributeOctTree(const vector<cv::KeyPoint>&
     return vResultKeys;
 }
 
-
-
-
 void ExtractorNode::DivideNode(ExtractorNode &n1, ExtractorNode &n2, ExtractorNode &n3, ExtractorNode &n4)
 {
     const int halfX = ceil(static_cast<float>(UR.x-UL.x)/2);
@@ -1096,8 +1109,6 @@ void ExtractorNode::DivideNode(ExtractorNode &n1, ExtractorNode &n2, ExtractorNo
 
 }
 
-
-
 // 對特徵點進行畸變校正
 void ORBExtrackor::UndistortKeyPoints()
 {
@@ -1131,14 +1142,29 @@ void ORBExtrackor::UndistortKeyPoints()
     }
 }
 
+void ORBExtrackor::ComputeStereoFromRGBD(const cv::Mat &imDepth)
+{
+    this->mvuRight = vector<float>(this->N,-1);
+    this->mvDepth = vector<float>(this->N,-1);
 
+    for(int i=0; i<this->N; i++)
+    {
+        const cv::KeyPoint &kp = this->mvKeys[i];
+        const cv::KeyPoint &kpU = this->mvKeysUn[i];
 
+        const float &v = kp.pt.y;
+        const float &u = kp.pt.x;
 
+        const float d = imDepth.at<float>(v,u);
 
+        if(d>0)
+        {
+            this->mvDepth[i] = d;
+            this->mvuRight[i] = kpU.pt.x-mbf/d;
+        }
+    }
 
-
-
-
+}
 
 void ORBExtrackor::DrawORB(cv::Mat im, std::vector<cv::KeyPoint> Keys, std::string windows)
 {
@@ -1160,6 +1186,8 @@ void ORBExtrackor::DrawORB(cv::Mat im, std::vector<cv::KeyPoint> Keys, std::stri
 
 
 
+
+// ====================== TEST ==========================
 
 void ORBExtrackor::testTrackRGBD(const cv::Mat &im)
 {
@@ -1193,11 +1221,6 @@ void ORBExtrackor::testextracte_orb(cv::Mat input,std::vector<cv::KeyPoint> &key
     cv::imshow("OpenCV_ORB", input);
     cv::waitKey(10);
 }
-
-
-// from tracking get cam and ORB parameter 
-
-
 
 
 }//namespace ORB
