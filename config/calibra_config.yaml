@@ -17,20 +17,19 @@ black_border: 2 # if you use kalibr_tag black_boarder = 2; if you use apriltag b
 #camera calibration 
 model_type: PINHOLE
 camera_name: camera
-#image_width: 1280
-#image_height: 720
+image_width: 1280
+image_height: 720
 
-#distortion_parameters:
-#   k1: 0.16375563343621427
-#   k2: -0.3102768678407425
-#   p1: -0.003912176364130468
-#   p2: 0.00035347945978329463
-
-#projection_parameters:
-#   fx: 611.6619978415015
-#   fy: 612.3504421750998
-#   cx: 321.2198443262521
-#   cy: 231.62284705305117
+distortion_parameters:
+   k1: 0.14408587
+   k2: -0.09078564
+   p1: 0.00510793
+   p2: 0.01576679
+projection_parameters:
+   fx: 946.87343919
+   fy: 945.06707689
+   cx: 677.78046819
+   cy: 367.33856022
 
 
 

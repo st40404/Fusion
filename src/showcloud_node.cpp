@@ -49,6 +49,8 @@ class PubPointClouds
 
         void TranScanToPoints(const sensor_msgs::LaserScanConstPtr& msgSCAN, std::vector<Eigen::Vector3d>& Points);
         void showScanCallback(const sensor_msgs::LaserScanConstPtr& msgSCAN, const sensor_msgs::ImageConstPtr& msgRGB);
+        void showORBCallback(const sensor_msgs::LaserScanConstPtr& msgSCAN);
+
         void PubScan(const sensor_msgs::LaserScanConstPtr& msgSCAN);
         void PubORB();
 
@@ -69,12 +71,18 @@ void PubPointClouds::PubAllPointClouds(const sensor_msgs::LaserScanConstPtr &msg
 // void PubPointClouds::PubAllPointClouds(const sensor_msgs::ImageConstPtr &msgRGB, 
 //                                        const sensor_msgs::ImageConstPtr &msgD) {
 
-    // sent RGB and Depth msg to get ORB point cloud
+    // sent RGB and Depth msg to extrack ORB point cloud
     extrackor.GrabRGB(msgRGB, msgD);
 
+    //////  debug use //////////
     // PubScan(msgSCAN);
-    showScanCallback(msgSCAN, msgRGB);
     // PubORB();
+
+    // transform scan from 3D point clouds to 2D, and project to RGB image
+    showScanCallback(msgSCAN, msgRGB);
+
+    // transform ORB feature from camera coordinate to lidar
+    showORBCallback(msgSCAN);
 }
 
 // for testing publish scan feature
@@ -107,7 +115,7 @@ void PubPointClouds::showScanCallback(const sensor_msgs::LaserScanConstPtr& msgS
                                       const sensor_msgs::ImageConstPtr& msgRGB) 
 {
     std::vector<Eigen::Vector3d> p_l;
-    // TranScanToPoints(msgSCAN, p_l);
+    TranScanToPoints(msgSCAN, p_l);
 
     Eigen::Matrix4d Tlc;
     Tlc.setZero();
@@ -119,47 +127,44 @@ void PubPointClouds::showScanCallback(const sensor_msgs::LaserScanConstPtr& msgS
         Tlc.setIdentity();
     }
 
-//     std::cerr << Tlc << std::endl;
-//     Eigen::Matrix3d Rlc = Tlc.block(0,0,3,3);
-//     Eigen::Vector3d tlc(Tlc(0,3),Tlc(1,3),Tlc(2,3));
+    Eigen::Matrix3d Rlc = Tlc.block(0,0,3,3);         // lidar to camera rotate matrix 旋轉矩陣
+    Eigen::Vector3d tlc(Tlc(0,3),Tlc(1,3),Tlc(2,3));  // lidar to camera transform matrix 位移矩陣
 
-//     Eigen::Matrix3d Rcl = Rlc.transpose();
-//     Eigen::Vector3d tcl = - Rcl * tlc;
+    Eigen::Matrix3d Rcl = Rlc.transpose();            // camera to lidar rotate matrix (Rlc的反矩陣)
+    Eigen::Vector3d tcl = - Rcl * tlc;                // camera to lidar transform matrix (位移矩陣)
 
-// //        std::cout << " Tlc: \n"<< Tlc<<std::endl;
+    std::vector<Eigen::Vector3d> p_c;
+    std::vector<cv::KeyPoint> keypoints;
 
-//     std::vector<Eigen::Vector3d> p_c;
-//     std::vector<cv::KeyPoint> keypoints;
+    int n_pts = msgSCAN->ranges.size();
+    for (int i = 0; i < n_pts; i++) {
+        p_c.emplace_back(Rcl * p_l[i] + tcl); 
+    }
 
-//     int n_pts = msgSCAN->ranges.size();
-//     for (int i = 0; i < n_pts; i++) {
-//         // std::cout << p_l[i].transpose() << std::endl;
-//         p_c.emplace_back(Rcl * p_l[i] + tcl); 
-//     }
+    std::vector< cv::Point2f > pixel;
+    std::vector< cv::Point3f> pts;
 
-//     std::vector< cv::Point2f > pixel;
-//     std::vector< cv::Point3f> pts;
+    for (int i = 0; i < n_pts; i++) {
+        double X = p_c[i].x();
+        double Y = p_c[i].y();
+        double Z = p_c[i].z();
 
-//     for (int i = 0; i < n_pts; i++) {            
-//         double X = p_c[i].x();
-//         double Y = p_c[i].y();
-//         double Z = p_c[i].z();
+        pts.push_back( cv::Point3f(X,Y,Z) );
 
-//         pts.push_back( cv::Point3f(X,Y,Z) );
+    }
 
-//     }
-//     cv::Mat r = cv::Mat::zeros(3,1,CV_64F);
-//     cv::Mat t = cv::Mat::zeros(3,1,CV_64F);
-//     cameraptr_->projectPoints(pts, r, t,pixel);
-// //        cv::projectPoints(pts, cv::Vec3d::zeros(), cv::Vec3d::zeros(), cvK_, cvD_, pixel);
+    cv::Mat r = cv::Mat::zeros(3,1,CV_64F);
+    cv::Mat t = cv::Mat::zeros(3,1,CV_64F);
+    cameraptr_->projectPoints(pts, r, t, pixel);
+//        cv::projectPoints(pts, cv::Vec3d::zeros(), cv::Vec3d::zeros(), cvK_, cvD_, pixel);
 
-//     cv::Mat img_src = cv_bridge::toCvShare(msgRGB, "bgr8")->image;
+    cv::Mat img_src = cv_bridge::toCvShare(msgRGB, "bgr8")->image;
 
-//     for (size_t j = 0; j < pixel.size(); ++j) {
-//         cv::circle(img_src, pixel[j],1, cv::Scalar(0,255,0),1);
-//     }
-//     cv::imshow("show", img_src);
-//     cv::waitKey(10);
+    for (size_t j = 0; j < pixel.size(); ++j) {
+        cv::circle(img_src, pixel[j], 1, cv::Scalar(0,255,0), 1);
+    }
+    cv::imshow("show", img_src);
+    cv::waitKey(10);
 }
 
 
@@ -167,11 +172,13 @@ void PubPointClouds::TranScanToPoints(const sensor_msgs::LaserScanConstPtr& msgS
 {
     // http://wiki.ros.org/laser_geometry
     size_t n_pts = msgSCAN->ranges.size ();
+
     Eigen::ArrayXXd ranges (n_pts, 2);
     Eigen::ArrayXXd output (n_pts, 2);
     Eigen::ArrayXXd co_sine_map (n_pts, 2);
 
 //        std::cout << "---------- read scan -----------"<<std::endl;
+
     for (size_t i = 0; i < n_pts; ++i)
     {
         // std::cout << msgSCAN->ranges[i]<< " "<<msgSCAN->angle_min + (double) i * msgSCAN->angle_increment <<std::endl;
@@ -195,6 +202,84 @@ void PubPointClouds::TranScanToPoints(const sensor_msgs::LaserScanConstPtr& msgS
         }
     }
 
+}
+
+void PubPointClouds::showORBCallback(const sensor_msgs::LaserScanConstPtr& msgSCAN) 
+{
+    // convert scan from sensor_msgs::LaserScanConstPtr to Eigen::Vector3d
+    std::vector<Eigen::Vector3d> p_l;
+    TranScanToPoints(msgSCAN, p_l);
+
+    // convert extrackor.mvKeys from cv::KeyPoint to Eigen::Vector3d
+    std::vector<Eigen::Vector3d> orb_c;
+
+    for (size_t i=0; i<extrackor.mvKeys.size(); i++)
+        orb_c.push_back(Eigen::Vector3d((extrackor.mvKeys[i].pt.x -1280/2 )/ 100.0 , (extrackor.mvKeys[i].pt.y-720/2 ) / 100.0, extrackor.mvDepth[i]) );
+        // orb_c.push_back(Eigen::Vector3d(extrackor.mvKeys[i].pt.x / 100.0, extrackor.mvKeys[i].pt.y / 100.0, extrackor.mvDepth[i]) );
+
+    // read transform matrix of lidar to camera coornidate 
+    Eigen::Matrix4d Tlc;
+    Tlc.setZero();
+
+    if(!cv_T_.empty())
+        cv::cv2eigen(cv_T_, Tlc);
+    else{
+        std::cerr <<" You Do not have calibra result Tlc. We use a Identity matrix." << std::endl;
+        Tlc.setIdentity();
+    }
+
+    Eigen::Matrix3d Rlc = Tlc.block(0,0,3,3);         // lidar to camera rotate matrix 旋轉矩陣
+    Eigen::Vector3d tlc(Tlc(0,3),Tlc(1,3),Tlc(2,3));  // lidar to camera transform matrix 位移矩陣
+
+    std::vector<Eigen::Vector3d> p_c;
+    for (int i = 0; i < orb_c.size(); i++) {
+        p_c.emplace_back(Rlc * orb_c[i] + tlc); 
+        // p_c.emplace_back(orb_c[i]);
+    }
+
+
+    pcl::PointCloud<pcl::PointXYZ> cloud;
+    cloud.header.frame_id = "camera_aligned_depth_to_color_frame";
+
+    // only publish ORB
+    cloud.points.resize (p_c.size());
+    for (size_t i=0; i<p_c.size(); i++)
+    {
+        cloud.points[i].x = p_c[i].x();
+        cloud.points[i].y = p_c[i].y();
+        cloud.points[i].z = p_c[i].z();
+    }
+    KeyFrame_pub.publish(cloud);
+
+    // publish ORB convert with scan
+    // cloud.points.resize (p_c.size() + p_l.size());
+    // for (size_t i=0; i<p_c.size(); i++)
+    // {
+    //     cloud.points[i].x = p_c[i].x();
+    //     cloud.points[i].y = p_c[i].y();
+    //     cloud.points[i].z = p_c[i].z();
+    // }
+
+    // for (int i = p_c.size(); i < p_c.size()+p_l.size(); i++)
+    // {
+    //     cloud.points[i].x = p_l[i].x();
+    //     cloud.points[i].y = p_l[i].y();
+    //     cloud.points[i].z = p_l[i].z();
+    // }
+    // KeyFrame_pub.publish(cloud);
+
+    // only publish scan
+    pcl::PointCloud<pcl::PointXYZ> scan;
+    scan.header.frame_id = "camera_aligned_depth_to_color_frame";
+    scan.points.resize (p_l.size());
+
+    for (int i = 0; i < p_l.size(); i++)
+    {
+        scan.points[i].x = p_l[i].x();
+        scan.points[i].y = p_l[i].y();
+        scan.points[i].z = p_l[i].z();
+    }
+    Scan_pub.publish(scan);
 }
 
 template <typename T>
@@ -298,6 +383,8 @@ int main(int argc, char **argv)
 
     ppc.extrackor.SetConfig(config_file);
 
+
+////////// extrinsic calibration add orb feature //////////
     message_filters::Subscriber<sensor_msgs::LaserScan> scan_sub(nh, scan_topic_name, 10);
     message_filters::Subscriber<sensor_msgs::Image> image_sub(nh, img_topic_name, 10);
     message_filters::Subscriber<sensor_msgs::Image> depth_sub(nh, depth_topic_name, 10);
@@ -306,12 +393,25 @@ int main(int argc, char **argv)
     message_filters::Synchronizer<sync_pol> sync(sync_pol(10), scan_sub, image_sub, depth_sub);
     sync.registerCallback(boost::bind(&PubPointClouds::PubAllPointClouds, &ppc, _1, _2, _3));
 
+
+////////// test orb feature //////////
     // message_filters::Subscriber<sensor_msgs::Image> image_sub(nh, img_topic_name, 10);
     // message_filters::Subscriber<sensor_msgs::Image> depth_sub(nh, depth_topic_name, 10);
 
     // typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> sync_pol;
     // message_filters::Synchronizer<sync_pol> sync(sync_pol(10), image_sub, depth_sub);
     // sync.registerCallback(boost::bind(&PubPointClouds::PubAllPointClouds, &ppc, _1, _2));
+
+
+////////// test extrinsic calibration //////////
+    // message_filters::Subscriber<sensor_msgs::LaserScan> scan_sub(nh, scan_topic_name, 10);
+    // message_filters::Subscriber<sensor_msgs::Image> image_sub(nh, img_topic_name, 10);
+
+    // typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::LaserScan, sensor_msgs::Image> sync_pol;
+    // message_filters::Synchronizer<sync_pol> sync(sync_pol(10), scan_sub, image_sub);
+    // sync.registerCallback(boost::bind(&PubPointClouds::showScanCallback, &ppc, _1, _2));
+
+
     std::cout << "start spin.." << std::endl;
 
     ros::spin();

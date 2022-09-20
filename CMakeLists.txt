@@ -1,5 +1,18 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 2.8.3)
 project(fusion)
+
+SET(CMAKE_BUILD_TYPE "Release") # Debug
+
+include(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
+CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
+if(COMPILER_SUPPORTS_CXX11)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+elseif(COMPILER_SUPPORTS_CXX0X)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+else()
+    message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
+endif()
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -8,6 +21,7 @@ project(fusion)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  image_transport
   roscpp
   rosbag
   sensor_msgs
@@ -18,6 +32,7 @@ find_package(catkin REQUIRED COMPONENTS
   nodelet
   std_msgs
   cmake_modules
+
   pcl_ros
   pcl_conversions
   laser_geometry
@@ -123,11 +138,14 @@ generate_messages(
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
+  INCLUDE_DIRS include
   INCLUDE_DIRS camera_models/include
-  CATKIN_DEPENDS roscpp
-                   pcl_conversions
-                   pcl_ros
-  laser_geometry
+  INCLUDE_DIRS ethz_apriltag
+  CATKIN_DEPENDS pcl_conversions
+                 pcl_ros
+		 laser_geometry
+		 image_transport roscpp rosbag sensor_msgs geometry_msgs tf cv_bridge message_runtime nodelet std_msgs
+  DEPENDS Eigen OpenCV
 )
 
 ###########
@@ -138,8 +156,10 @@ catkin_package(
 ## Your package locations should be listed before other locations
 include_directories(
 include
+ethz_apriltag
 camera_models/include
 ${PROJECT_SOURCE_DIR}
+${Eigen_INCLUDE_DIRS}
 ${catkin_INCLUDE_DIRS}
 ${OpenCV_INCLUDE_DIRS}
 ${CERES_INCLUDE_DIRS}
@@ -161,6 +181,7 @@ ${CERES_INCLUDE_DIRS}
 # add_executable(${PROJECT_NAME}_node src/fusion_node.cpp)
 
 file(GLOB_RECURSE c_files
+	${PROJECT_SOURCE_DIR}/ethz_apriltag/*.cc
         ${PROJECT_SOURCE_DIR}/camera_models/src/*.cc
         ${PROJECT_SOURCE_DIR}/src/*.cpp
         )
@@ -177,6 +198,8 @@ target_link_libraries(fusion
 add_executable(showcloud_node src/showcloud_node.cpp)
 add_dependencies(showcloud_node ${catkin_EXPORTED_TARGETS})
 target_link_libraries(showcloud_node
+  ${catkin_LIBRARIES}
+  ${OpenCV_LIBRARIES}
   fusion
 )
 

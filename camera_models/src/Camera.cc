@@ -191,11 +191,14 @@ void Camera::projectPoints(const std::vector<cv::Point3f> &objectPoints,
     // Rotate and translate
     Eigen::Vector3d P;
     P << objectPoint.x, objectPoint.y, objectPoint.z;
+    // std::cerr << P <<std::endl;
 
     P = R * P + t;
+    // std::cerr << P <<std::endl;
 
     Eigen::Vector2d p;
     spaceToPlane(P, p);
+    // std::cerr << cv::Point2f(p(0), p(1)) <<std::endl;
 
     imagePoints.push_back(cv::Point2f(p(0), p(1)));
   }

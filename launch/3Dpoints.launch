@@ -15,6 +15,7 @@
 
 
   <!-- <node type="rviz" name="rviz" pkg="rviz" args="-d $(find fusion)/rviz/ShowScan.rviz" /> -->
+  <node type="rviz" name="rviz" pkg="rviz" args="-d $(find fusion)/rviz/ScanORBfusion.rviz" />
 
 </launch>
 

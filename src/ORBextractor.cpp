@@ -362,9 +362,9 @@ static int bit_pattern_31_[256*4] =
 
 ORBExtrackor::ORBExtrackor()
 {
-    std::cout << "qqqqqqqqqqqqqqqqqqqqqqqqq" << std::endl;
-    std::cout << "ORBExtrackor constructure" << std::endl;
-    std::cout << "qqqqqqqqqqqqqqqqqqqqqqqqq" << std::endl;
+    std::cout << "#########################################################" << std::endl;
+    std::cout << "#############  ORBExtrackor constructure  ###############" << std::endl;
+    std::cout << "#########################################################" << std::endl;
 }
 
 // 從calibra_config.yaml中讀取攝影機與ORB參數, 並且放到
@@ -527,6 +527,13 @@ void ORBExtrackor::SetPyramid()
 void ORBExtrackor::GrabRGB(const sensor_msgs::ImageConstPtr &msgRGB, 
                            const sensor_msgs::ImageConstPtr &msgD)
 {
+
+    cv::Mat cv_ptr = cv_bridge::toCvShare(msgRGB, "bgr8")->image;
+    cv::Mat testORBimg, ORBimg, unORBimg;
+    cv_ptr.copyTo(testORBimg);
+    cv_ptr.copyTo(ORBimg);
+    cv_ptr.copyTo(unORBimg);
+
     // Copy the ros image message to cv::Mat.
     cv_bridge::CvImageConstPtr cv_ptrRGB;
     try
@@ -553,14 +560,9 @@ void ORBExtrackor::GrabRGB(const sensor_msgs::ImageConstPtr &msgRGB,
     GrabImageRGBD(cv_ptrRGB->image,cv_ptrD->image,cv_ptrRGB->header.stamp.toSec());
     // TrackRGBD(cv_ptrRGB->image,cv_ptrD->image,cv_ptrRGB->header.stamp.toSec());
 
-    cv::Mat testORBimg,ORBimg, unORBimg;
-    cv_ptrRGB->image.copyTo(testORBimg);
-    cv_ptrRGB->image.copyTo(ORBimg);
-    cv_ptrRGB->image.copyTo(unORBimg);
-
     // testTrackRGBD(testORBimg);
     // DrawORB(ORBimg, this->mvKeys, "ORB");
-    DrawORB(unORBimg, this->mvKeysUn, "unORB");
+    // DrawORB( unORBimg, this->mvKeysUn, "unORB");
 
     testORBimg.release();
     ORBimg.release();
@@ -651,7 +653,7 @@ void ORBExtrackor::TrackRGBD(InputArray _image, vector<KeyPoint>& _keypoints, Ou
     ComputeKeyPointsOctTree(allKeypoints);
 
     Mat descriptors;
-
+    
     // 計算全部金字塔內的特徵點數量
     int nkeypoints = 0;
     for (int level = 0; level < nlevels; ++level)
@@ -728,7 +730,6 @@ void ORBExtrackor::ComputePyramid(cv::Mat image)
                            BORDER_REFLECT_101);
         }
     }
-
 }
 
 // 使用四元樹（Q-Tree）的方式计算每一層圖像的特徵點並进行分配
